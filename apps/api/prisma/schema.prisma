@@ -1,0 +1,162 @@
+generator client {
+  provider = "prisma-client-js"
+}
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+enum Role { USER MODERATOR SHOP_PARTNER ADMIN OWNER }
+enum ListingStatus { PENDING ACTIVE REJECTED SOLD ARCHIVED }
+enum BanRequestStatus { PENDING APPROVED REJECTED }
+enum ShopStatus { PENDING APPROVED REJECTED SUSPENDED }
+enum ReportStatus { OPEN REVIEWED DISMISSED ACTIONED }
+enum BoostStatus { REQUESTED APPROVED REJECTED COMPLETED }
+model User {
+  id             String   @id @default(cuid())
+  telegramId     String   @unique
+  username       String?
+  firstName      String
+  lastName       String?
+  photoUrl       String?
+  phone          String?
+  phoneVerified  Boolean  @default(false)
+  city           String?
+  roles          Role[]   @default([USER])
+  mutedUntil     DateTime?
+  bannedAt       DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  listings       Listing[]
+  follows        Follow[] @relation("Follower")
+  followers      Follow[] @relation("Followed")
+  reviewsGiven   Review[] @relation("ReviewAuthor")
+  reviewsReceived Review[] @relation("ReviewTarget")
+  reportsMade    Report[] @relation("ReportAuthor")
+  banRequests    BanRequest[] @relation("BanTarget")
+  shops          Shop[]
+  notifications  Notification[]
+  auditActor     AuditLog[] @relation("AuditActor")
+}
+model Listing {
+  id          String        @id @default(cuid())
+  sellerId    String
+  seller      User          @relation(fields: [sellerId], references: [id])
+  title       String
+  description String
+  price       Int
+  currency    String        @default("RUB")
+  city        String
+  category    String
+  images      String[]      @default([])
+  status      ListingStatus @default(PENDING)
+  isPromoted  Boolean       @default(false)
+  promotedUntil DateTime?
+  views       Int           @default(0)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  reports     Report[]
+  boostRequests BoostRequest[]
+  @@index([city, category, status, createdAt])
+  @@index([sellerId, createdAt])
+}
+model Follow {
+  id          String   @id @default(cuid())
+  followerId  String
+  followedId  String
+  follower    User     @relation("Follower", fields: [followerId], references: [id])
+  followed    User     @relation("Followed", fields: [followedId], references: [id])
+  createdAt   DateTime @default(now())
+  @@unique([followerId, followedId])
+}
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  type      String
+  title     String
+  body      String
+  url       String?
+  readAt    DateTime?
+  createdAt DateTime @default(now())
+  @@index([userId, readAt, createdAt])
+}
+model Review {
+  id          String   @id @default(cuid())
+  authorId    String
+  targetId    String
+  author      User     @relation("ReviewAuthor", fields: [authorId], references: [id])
+  target      User     @relation("ReviewTarget", fields: [targetId], references: [id])
+  rating      Int
+  text        String?
+  dealRef     String?
+  verifiedDeal Boolean @default(false)
+  createdAt   DateTime @default(now())
+  @@index([targetId, createdAt])
+}
+model Report {
+  id          String       @id @default(cuid())
+  reporterId  String
+  reporter    User         @relation("ReportAuthor", fields: [reporterId], references: [id])
+  listingId   String
+  listing     Listing      @relation(fields: [listingId], references: [id])
+  reason      String
+  evidenceUrls String[]    @default([])
+  status      ReportStatus @default(OPEN)
+  createdAt   DateTime     @default(now())
+  resolvedAt  DateTime?
+}
+model BanRequest {
+  id          String           @id @default(cuid())
+  targetId    String
+  target      User             @relation("BanTarget", fields: [targetId], references: [id])
+  requestedByTelegramId String
+  reason      String
+  evidenceUrls String[]        @default([])
+  status      BanRequestStatus @default(PENDING)
+  decidedByTelegramId String?
+  decisionNote String?
+  createdAt   DateTime         @default(now())
+  decidedAt   DateTime?
+}
+model Shop {
+  id          String     @id @default(cuid())
+  ownerId     String
+  owner       User       @relation(fields: [ownerId], references: [id])
+  title       String
+  description String
+  logoUrl     String?
+  city        String
+  status      ShopStatus @default(PENDING)
+  createdAt   DateTime   @default(now())
+}
+model BoostRequest {
+  id          String      @id @default(cuid())
+  listingId   String
+  listing     Listing     @relation(fields: [listingId], references: [id])
+  userTelegramId String
+  status      BoostStatus @default(REQUESTED)
+  amountRub   Int
+  createdAt   DateTime    @default(now())
+  resolvedAt  DateTime?
+}
+model AdBanner {
+  id        String   @id @default(cuid())
+  title     String
+  imageUrl  String?
+  targetUrl String?
+  active    Boolean  @default(false)
+  startsAt  DateTime?
+  endsAt    DateTime?
+  createdAt DateTime @default(now())
+}
+model AuditLog {
+  id        String   @id @default(cuid())
+  actorId   String
+  actor     User     @relation("AuditActor", fields: [actorId], references: [id])
+  action    String
+  targetType String
+  targetId  String
+  metadata  Json?
+  createdAt DateTime @default(now())
+  @@index([createdAt])
+}
